@@ -81,4 +81,4 @@ Implementation:
 
 ## Reference
 
-Sverrisson, F., Feydy, J., Correia, B., & Bronstein, M. (2020). Fast end-to-end learning on protein surfaces. [bioRxiv](https://www.biorxiv.org/content/10.1101/2020.12.28.424589v1).
+Sverrisson, F., Feydy, J., Correia, B. E., & Bronstein, M. M. (2020). Fast end-to-end learning on protein surfaces. [bioRxiv](https://www.biorxiv.org/content/10.1101/2020.12.28.424589v1).
