@@ -1,4 +1,5 @@
 ## Fast end-to-end learning on protein surfaces
+![Method overview](overview.PNG)
 
 ## Abstract
 
