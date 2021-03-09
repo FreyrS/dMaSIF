@@ -191,7 +191,6 @@ class PointNet2_seg(torch.nn.Module):
         self.radius = args.radius
         self.k = 10000  # We don't restrict the number of points in a patch
         self.n_layers = args.n_layers
-        self.point_matching = args.point_matching
 
         # self.sa1_module = SAModule(1.0, self.radius, MLP([self.I+3, self.O, self.O]),self.k)
         self.layers = nn.ModuleList(
@@ -207,13 +206,13 @@ class PointNet2_seg(torch.nn.Module):
                 nn.Sequential(
                     nn.Linear(self.O, self.O), nn.ReLU(), nn.Linear(self.O, self.O)
                 )
-                for i in range(n_layers)
+                for i in range(self.n_layers)
             ]
         )
 
         self.linear_transform = nn.ModuleList(
             [nn.Linear(self.I, self.O)]
-            + [nn.Linear(self.O, self.O) for i in range(n_layers - 1)]
+            + [nn.Linear(self.O, self.O) for i in range(self.n_layers - 1)]
         )
 
     def forward(self, positions, features, batch_indices):

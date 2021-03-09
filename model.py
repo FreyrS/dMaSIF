@@ -218,9 +218,9 @@ class dMaSIF(nn.Module):
                 )
 
         elif args.embedding_layer == "DGCNN":
-            self.conv = DGCNN(I + 3, E)
+            self.conv = DGCNN_seg(I + 3, E,self.args.n_layers,self.args.k)
             if args.search:
-                self.conv2 = DGCNN(I + 3, E)
+                self.conv2 = DGCNN_seg(I + 3, E,self.args.n_layers,self.args.k)
 
         elif args.embedding_layer == "PointNet++":
             self.conv = PointNet2_seg(args, I, E)
@@ -306,10 +306,10 @@ class dMaSIF(nn.Module):
         # First baseline:
         elif self.args.embedding_layer == "DGCNN":
             features = torch.cat([features, P["xyz"]], dim=-1).contiguous()
-            P["embedding_1"] = self.conv(features, features, P["batch"], P["batch"])
+            P["embedding_1"] = self.conv(P["xyz"], features, P["batch"])
             if self.args.search:
                 P["embedding_2"] = self.conv2(
-                    features, features, P["batch"], P["batch"]
+                    P["xyz"], features, P["batch"]
                 )
 
         # Second baseline
