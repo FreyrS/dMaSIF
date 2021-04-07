@@ -21,22 +21,23 @@ colorDict = {
 }
 
 
-def interpolate_color(c1, c2, val, min=-1, max=1):
-    assert min <= val <= max
-    # if val < min or val > max:
-    #     return colorDict['white']
-    r = ((max - val) * colorDict[c1][1] + (val - min) * colorDict[c2][1]) / (max - min)
-    g = ((max - val) * colorDict[c1][2] + (val - min) * colorDict[c2][2]) / (max - min)
-    b = ((max - val) * colorDict[c1][3] + (val - min) * colorDict[c2][3]) / (max - min)
-    return [COLOR, r, g, b]
+def interpolate_color(c1, c2, vals, min=-1, max=1):
+    r = ((max - vals) * colorDict[c1][1] + (vals - min) * colorDict[c2][1]) / (max - min)
+    g = ((max - vals) * colorDict[c1][2] + (vals - min) * colorDict[c2][2]) / (max - min)
+    b = ((max - vals) * colorDict[c1][3] + (vals - min) * colorDict[c2][3]) / (max - min)
+    return np.stack(([COLOR] * len(vals), r, g, b))
 
 
-def bwr_gradient(val, min=-1, max=1):
+def bwr_gradient(vals):
     """ Blue-white-red gradient """
-    if val > (max + min) / 2:
-        return interpolate_color('white', 'red', val, min, max)
-    else:
-        return interpolate_color('blue', 'white', val, min, max)
+    max = np.max(vals)
+    min = np.min(vals)
+
+    colors = np.empty((4, len(vals)))
+    colors[:, vals >= (max + min) / 2] = interpolate_color('white', 'red', vals[vals >= (max + min) / 2], min, max)
+    colors[:, vals < (max + min) / 2] = interpolate_color('blue', 'white', vals[vals < (max + min) / 2], min, max)
+
+    return colors
 
 
 class MyVTK:
@@ -91,25 +92,26 @@ class MyVTK:
         return self.feat_names
 
 
-def send2pymol(verts, feat, feat_names, basename, dotSize=0.2):
-    feat_min = np.min(feat, axis=0)
-    feat_max = np.max(feat, axis=0)
-
+def send2pymol(verts, feat, feat_names, basename, dotSize=0.3):
     # Draw vertices
     group_names = ""
     for j in range(feat.shape[1]):
-        obj = []
-        for i, v in enumerate(verts):
-            # colorToAdd = colorDict[color]
-            # colorToAdd = interpolate_color('blue', 'red', feat[i, j])
-            colorToAdd = bwr_gradient(feat[i, j], feat_min[j], feat_max[j])
-            # Vertices
-            obj.extend(colorToAdd)
-            obj.extend([SPHERE, v[0], v[1], v[2], dotSize])
-            # obj.append(END)
+        colors = bwr_gradient(feat[:, j])
+        spheres = np.stack(([SPHERE] * len(verts), verts[:, 0], verts[:, 1], verts[:, 2], [dotSize] * len(verts)))
+        obj = np.empty(colors.size + spheres.size)
+        obj[0::9] = colors[0, :]
+        obj[1::9] = colors[1, :]
+        obj[2::9] = colors[2, :]
+        obj[3::9] = colors[3, :]
+        obj[4::9] = spheres[0, :]
+        obj[5::9] = spheres[1, :]
+        obj[6::9] = spheres[2, :]
+        obj[7::9] = spheres[3, :]
+        obj[8::9] = spheres[4, :]
 
         name = feat_names[j] + "_" + basename
         cmd.load_cgo(obj, name, 1.0)
+        
         if j > 0:
             group_names += " "
         group_names += name
