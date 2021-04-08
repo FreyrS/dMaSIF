@@ -39,12 +39,13 @@ def load_surface_np(fname, center):
     }
 
 
-ply_dir = Path("01-benchmark_surfaces")
-npy_dir = Path("01-benchmark_surfaces_npy")
-for p in tqdm(ply_dir.glob("*.ply")):
-    protein = load_surface_np(p, center=False)
-    np.save(npy_dir / (p.stem + "_xyz.npy"), protein["xyz"])
-    np.save(npy_dir / (p.stem + "_triangles.npy"), protein["triangles"])
-    np.save(npy_dir / (p.stem + "_features.npy"), protein["features"])
-    np.save(npy_dir / (p.stem + "_iface_labels.npy"), protein["iface_labels"])
-    np.save(npy_dir / (p.stem + "_normals.npy"), protein["normals"])
+def convert_plys(ply_dir, npy_dir):
+    print("Converting PLYs")
+    for p in tqdm(ply_dir.glob("*.ply")):
+        protein = load_surface_np(p, center=False)
+        np.save(npy_dir / (p.stem + "_xyz.npy"), protein["xyz"])
+        np.save(npy_dir / (p.stem + "_triangles.npy"), protein["triangles"])
+        np.save(npy_dir / (p.stem + "_features.npy"), protein["features"])
+        np.save(npy_dir / (p.stem + "_iface_labels.npy"), protein["iface_labels"])
+        np.save(npy_dir / (p.stem + "_normals.npy"), protein["normals"])
+

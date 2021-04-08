@@ -7,6 +7,9 @@ import math
 import urllib.request
 import tarfile
 from pathlib import Path
+import requests
+from data_preprocessing.convert_pdb2npy import convert_pdbs
+from data_preprocessing.convert_ply2npy import convert_plys
 
 tensor = torch.FloatTensor
 inttensor = torch.LongTensor
@@ -265,86 +268,6 @@ def load_protein_pair(pdb_id, data_dir):
     return protein_pair_data
 
 
-class ProteinSurfaces(InMemoryDataset):
-    url = ""
-
-    def __init__(self, root, train=True, transform=None, pre_transform=None):
-        super(ProteinSurfaces, self).__init__(root, transform, pre_transform)
-        path = self.processed_paths[0] if train else self.processed_paths[1]
-        self.data, self.slices = torch.load(path)
-
-    @property
-    def raw_file_names(self):
-        return "protein_surfaces.tar.gz"
-
-    @property
-    def processed_file_names(self):
-        return [
-            "training_data.pt",
-            "testing_data.pt",
-            "training_data_ids.npy",
-            "testing_data_ids.npy",
-        ]
-
-    def download(self):
-        raise RuntimeError(
-            "Dataset not found. Please download {} from {} and move it to {}".format(
-                self.raw_file_names, self.url, self.raw_dir
-            )
-        )
-
-    def process(self):
-        # Untar surface files
-        tar = tarfile.open(self.raw_paths[0])
-        tar.extractall(self.raw_dir)
-        tar.close()
-
-        extracted_dir = Path(self.raw_paths[0]).with_suffix("").with_suffix("")
-        protein_dir = extracted_dir / "01-benchmark_surfaces_npy"
-
-        with open(extracted_dir / "training.txt") as f_tr, open(
-            extracted_dir / "testing.txt"
-        ) as f_ts:
-            training_list = sorted(f_tr.read().splitlines())
-            testing_list = sorted(f_ts.read().splitlines())
-
-        # # Read data into huge `Data` list.
-        training_data = []
-        training_data_ids = []
-        for p in training_list:
-            try:
-                protein = load_protein_npy(p, protein_dir)
-            except FileNotFoundError:
-                continue
-            training_data.append(protein)
-            training_data_ids.append(p)
-
-        testing_data = []
-        testing_data_ids = []
-        for p in testing_list:
-            try:
-                protein = load_protein_npy(p, protein_dir)
-            except FileNotFoundError:
-                continue
-            testing_data.append(protein)
-            testing_data_ids.append(p)
-
-        if self.pre_filter is not None:
-            training_data = [data for data in training_data if self.pre_filter(data)]
-            testing_data = [data for data in testing_data if self.pre_filter(data)]
-
-        if self.pre_transform is not None:
-            training_data = [self.pre_transform(data) for data in training_data]
-            testing_data = [self.pre_transform(data) for data in testing_data]
-
-        training_data, training_slices = self.collate(training_data)
-        torch.save((training_data, training_slices), self.processed_paths[0])
-        np.save(self.processed_paths[2], training_data_ids)
-        testing_data, testing_slices = self.collate(testing_data)
-        torch.save((testing_data, testing_slices), self.processed_paths[1])
-        np.save(self.processed_paths[3], testing_data_ids)
-
-
 class ProteinPairsSurfaces(InMemoryDataset):
     url = ""
 
@@ -356,7 +279,7 @@ class ProteinPairsSurfaces(InMemoryDataset):
 
     @property
     def raw_file_names(self):
-        return "protein_surfaces.tar.gz"
+        return "masif_site_masif_search_pdbs_and_ply_files.tar.gz"
 
     @property
     def processed_file_names(self):
@@ -377,29 +300,44 @@ class ProteinPairsSurfaces(InMemoryDataset):
         return file_names
 
     def download(self):
-        raise RuntimeError(
-            "Dataset not found. Please download {} from {} and move it to {}".format(
-                self.raw_file_names, self.url, self.raw_dir
-            )
-        )
+        url = 'https://zenodo.org/record/2625420/files/masif_site_masif_search_pdbs_and_ply_files.tar.gz'
+        target_path = self.raw_paths[0]
+        response = requests.get(url, stream=True)
+        if response.status_code == 200:
+            with open(target_path, 'wb') as f:
+                f.write(response.raw.read())
+                
+        #raise RuntimeError(
+        #    "Dataset not found. Please download {} from {} and move it to {}".format(
+        #        self.raw_file_names, self.url, self.raw_dir
+        #    )
+        #)
 
     def process(self):
+        pdb_dir = Path(self.root) / "raw" / "01-benchmark_pdbs"
+        surf_dir = Path(self.root) / "raw" / "01-benchmark_surfaces"
+        protein_dir = Path(self.root) / "raw" / "01-benchmark_surfaces_npy"
+        lists_dir = Path('./lists')
+
         # Untar surface files
-        tar = tarfile.open(self.raw_paths[0])
-        tar.extractall(self.raw_dir)
-        tar.close()
+        if not (pdb_dir.exists() and surf_dir.exists()):
+            tar = tarfile.open(self.raw_paths[0])
+            tar.extractall(self.raw_dir)
+            tar.close()
 
-        extracted_dir = Path(self.raw_paths[0]).with_suffix("").with_suffix("")
-        protein_dir = extracted_dir / "01-benchmark_surfaces_npy"
+        if not protein_dir.exists():
+            protein_dir.mkdir(parents=False, exist_ok=False)
+            convert_plys(surf_dir,protein_dir)
+            convert_pdbs(pdb_dir,protein_dir)
 
-        with open(extracted_dir / "training.txt") as f_tr, open(
-            extracted_dir / "testing.txt"
+        with open(lists_dir / "training.txt") as f_tr, open(
+            lists_dir / "testing.txt"
         ) as f_ts:
             training_list = sorted(f_tr.read().splitlines())
             testing_list = sorted(f_ts.read().splitlines())
 
-        with open(extracted_dir / "training_ppi.txt") as f_tr, open(
-            extracted_dir / "testing_ppi.txt"
+        with open(lists_dir / "training_ppi.txt") as f_tr, open(
+            lists_dir / "testing_ppi.txt"
         ) as f_ts:
             training_pairs_list = sorted(f_tr.read().splitlines())
             testing_pairs_list = sorted(f_ts.read().splitlines())

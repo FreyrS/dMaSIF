@@ -31,9 +31,9 @@ def load_structure_np(fname, center):
     return {"xyz": coords, "types": types_array}
 
 
-pdb_dir = Path("01-benchmark_pdbs")
-npy_dir = Path("01-benchmark_surfaces_npy")
-for p in tqdm(pdb_dir.glob("*.pdb")):
-    protein = load_structure_np(p, center=False)
-    np.save(npy_dir / (p.stem + "_atomxyz.npy"), protein["xyz"])
-    np.save(npy_dir / (p.stem + "_atomtypes.npy"), protein["types"])
+def convert_pdbs(pdb_dir, npy_dir):
+    print("Converting PDBs")
+    for p in tqdm(pdb_dir.glob("*.pdb")):
+        protein = load_structure_np(p, center=False)
+        np.save(npy_dir / (p.stem + "_atomxyz.npy"), protein["xyz"])
+        np.save(npy_dir / (p.stem + "_atomtypes.npy"), protein["types"])
