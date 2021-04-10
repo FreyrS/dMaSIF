@@ -1,31 +1,9 @@
+# Arne Schneuing 2021 LPDI EPFL
+
 import os
 import numpy as np
 from pymol import cmd, stored
 from pymol.cgo import *
-
-
-colorDict = {
-    "sky": [COLOR, 0.0, 0.76, 1.0],
-    "sea": [COLOR, 0.0, 0.90, 0.5],
-    "yellowtint": [COLOR, 0.88, 0.97, 0.02],
-    "hotpink": [COLOR, 0.90, 0.40, 0.70],
-    "greentint": [COLOR, 0.50, 0.90, 0.40],
-    "blue": [COLOR, 0.0, 0.0, 1.0],
-    "green": [COLOR, 0.0, 1.0, 0.0],
-    "yellow": [COLOR, 1.0, 1.0, 0.0],
-    "orange": [COLOR, 1.0, 0.5, 0.0],
-    "red": [COLOR, 1.0, 0.0, 0.0],
-    "black": [COLOR, 0.0, 0.0, 0.0],
-    "white": [COLOR, 1.0, 1.0, 1.0],
-    "gray": [COLOR, 0.9, 0.9, 0.9],
-}
-
-
-def interpolate_color(c1, c2, vals, min=-1, max=1):
-    r = ((max - vals) * colorDict[c1][1] + (vals - min) * colorDict[c2][1]) / (max - min)
-    g = ((max - vals) * colorDict[c1][2] + (vals - min) * colorDict[c2][2]) / (max - min)
-    b = ((max - vals) * colorDict[c1][3] + (vals - min) * colorDict[c2][3]) / (max - min)
-    return np.stack(([COLOR] * len(vals), r, g, b))
 
 
 def bwr_gradient(vals):
@@ -33,11 +11,19 @@ def bwr_gradient(vals):
     max = np.max(vals)
     min = np.min(vals)
 
-    colors = np.empty((4, len(vals)))
-    colors[:, vals >= (max + min) / 2] = interpolate_color('white', 'red', vals[vals >= (max + min) / 2], min, max)
-    colors[:, vals < (max + min) / 2] = interpolate_color('blue', 'white', vals[vals < (max + min) / 2], min, max)
+    # normalize values
+    vals -= (max + min) / 2
+    vals *= 2 / (max - min)
 
-    return colors
+    blue_vals = np.copy(vals)
+    blue_vals[vals >= 0] = 0
+    blue_vals = abs(blue_vals)
+    red_vals = vals
+    red_vals[vals < 0] = 0
+    r = 1.0 - blue_vals
+    g = 1.0 - (blue_vals + red_vals)
+    b = 1.0 - red_vals
+    return np.stack(([COLOR] * len(vals), r, g, b))
 
 
 class MyVTK:
@@ -110,8 +96,8 @@ def send2pymol(verts, feat, feat_names, basename, dotSize=0.3):
         obj[8::9] = spheres[4, :]
 
         name = feat_names[j] + "_" + basename
-        cmd.load_cgo(obj, name, 1.0)
-        
+        cmd.load_cgo(obj, name)
+
         if j > 0:
             group_names += " "
         group_names += name
