@@ -13,7 +13,10 @@ def bwr_gradient(vals):
 
     # normalize values
     vals -= (max + min) / 2
-    vals *= 2 / (max - min)
+    if min >= max:
+        vals *= 0
+    else:
+        vals *= 2 / (max - min)
 
     blue_vals = np.copy(vals)
     blue_vals[vals >= 0] = 0
