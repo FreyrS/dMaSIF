@@ -86,7 +86,8 @@ def send2pymol(verts, feat, feat_names, basename, dotSize=0.3):
     group_names = ""
     for j in range(feat.shape[1]):
         colors = bwr_gradient(feat[:, j])
-        spheres = np.stack(([SPHERE] * len(verts), verts[:, 0], verts[:, 1], verts[:, 2], [dotSize] * len(verts)))
+        spheres = np.stack(([SPHERE] * len(verts), verts[:, 0], verts[:, 1], 
+                            verts[:, 2], [dotSize] * len(verts)))
         obj = np.empty(colors.size + spheres.size)
         obj[0::9] = colors[0, :]
         obj[1::9] = colors[1, :]
