@@ -76,6 +76,15 @@ Implementation:
 - The scripts used to **generate the figures** of the paper can be found in `data_analysis/`.
 
 
+## PyMOL
+
+The data produced by dMaSIF can be visualized in PyMOL using [`dmasif_pymol.py`](https://github.com/FreyrS/dMaSIF/blob/pymol_plugin/dmasif_pymol.py). To use this script, open PyMOL, press **File**&rarr;**Run Script...** and select `dmasif_pymol.py`. You can now load protein surface point clouds using the following command inside PyMOL:
+```
+loadpred preds\<experiment_name>, 1ABC_D
+```
+The `dmasif_pymol.py` script also provides a `loadvtk <path/to/file.vtk>` command but this option is much slower and therefore not recommended.
+
+
 ## License
 
 <a rel="license" href="http://creativecommons.org/licenses/by-nc-nd/4.0/"><img alt="Creative Commons License" style="border-width:0" src="https://i.creativecommons.org/l/by-nc-nd/4.0/88x31.png" /></a><br />This work is licensed under a <a rel="license" href="http://creativecommons.org/licenses/by-nc-nd/4.0/">Creative Commons Attribution-NonCommercial-NoDerivatives 4.0 International License</a>.
