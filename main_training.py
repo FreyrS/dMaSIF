@@ -20,6 +20,9 @@ args = parser.parse_args()
 writer = SummaryWriter("runs/{}".format(args.experiment_name))
 model_path = "models/" + args.experiment_name
 
+if not Path("models/").exists():
+    Path("models/").mkdir(exist_ok=False)
+
 # Ensure reproducibility:
 torch.backends.cudnn.deterministic = True
 torch.manual_seed(args.seed)
