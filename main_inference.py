@@ -43,7 +43,7 @@ else:
     )
     test_pdb_ids = (
         np.load("surface_data/processed/testing_pairs_data_ids.npy")
-        if args.site_prediction
+        if args.site
         else np.load("surface_data/processed/testing_pairs_data_ids_ppi.npy")
     )
 
