@@ -75,7 +75,7 @@ def save_protein_batch_single(protein_pair_id, P, save_path, pdb_idx):
 
     embedding = P["embedding_1"] if pdb_idx == 1 else P["embedding_2"]
 
-    predictions = torch.sigmoid(P["iface_preds"])
+    predictions = torch.sigmoid(P["iface_preds"]) if "iface_preds" in P.keys() else 0.0*embedding[:,0].view(-1, 1)
 
     labels = P["labels"].view(-1, 1) if P["labels"] is not None else 0.0 * predictions
 
