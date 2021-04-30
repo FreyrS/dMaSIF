@@ -39,7 +39,7 @@ if args.single_pdb != "":
     test_pdb_ids = [args.single_pdb]
 else:
     test_dataset = ProteinPairsSurfaces(
-        "surface_data", train=False, ppi=args.point_matching, transform=transformations
+        "surface_data", train=False, ppi=args.search, transform=transformations
     )
     test_pdb_ids = (
         np.load("surface_data/processed/testing_pairs_data_ids.npy")
