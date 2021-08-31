@@ -232,14 +232,14 @@ class PairData(Data):
             return 0
 
 
-def load_protein_pair(pdb_id, data_dir):
+def load_protein_pair(pdb_id, data_dir,single_pdb=False):
     """Loads a protein surface mesh and its features"""
     pspl = pdb_id.split("_")
     p1_id = pspl[0] + "_" + pspl[1]
     p2_id = pspl[0] + "_" + pspl[2]
 
-    p1 = load_protein_npy(p1_id, data_dir, center=False)
-    p2 = load_protein_npy(p2_id, data_dir, center=False)
+    p1 = load_protein_npy(p1_id, data_dir, center=False,single_pdb=single_pdb)
+    p2 = load_protein_npy(p2_id, data_dir, center=False,single_pdb=single_pdb)
     # pdist = ((p1['xyz'][:,None,:]-p2['xyz'][None,:,:])**2).sum(-1).sqrt()
     # pdist = pdist<2.0
     # y_p1 = (pdist.sum(1)>0).to(torch.float).reshape(-1,1)

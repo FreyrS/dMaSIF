@@ -11,7 +11,7 @@ from pathlib import Path
 from data import ProteinPairsSurfaces, PairData, CenterPairAtoms
 from data import RandomRotationPairAtoms, NormalizeChemFeatures, iface_valid_filter
 from model import dMaSIF
-from data_iteration import iterate
+from data_iteration import iterate, iterate_surface_precompute
 from helper import *
 from Arguments import parser
 
@@ -29,6 +29,10 @@ torch.manual_seed(args.seed)
 torch.cuda.manual_seed_all(args.seed)
 np.random.seed(args.seed)
 
+# Create the model, with a warm restart if applicable:
+net = dMaSIF(args)
+net = net.to(args.device)
+
 # We load the train and test datasets.
 # Random transforms, to ensure that no network/baseline overfits on pose parameters:
 transformations = (
@@ -37,41 +41,46 @@ transformations = (
     else Compose([NormalizeChemFeatures()])
 )
 
+# PyTorch geometric expects an explicit list of "batched variables":
+batch_vars = ["xyz_p1", "xyz_p2", "atom_coords_p1", "atom_coords_p2"]
 # Load the train dataset:
 train_dataset = ProteinPairsSurfaces(
     "surface_data", ppi=args.search, train=True, transform=transformations
 )
 train_dataset = [data for data in train_dataset if iface_valid_filter(data)]
+train_loader = DataLoader(
+    train_dataset, batch_size=1, follow_batch=batch_vars, shuffle=True
+)
+print("Preprocessing training dataset")
+train_dataset = iterate_surface_precompute(train_loader, net, args)
 
 # Train/Validation split:
 train_nsamples = len(train_dataset)
 val_nsamples = int(train_nsamples * args.validation_fraction)
 train_nsamples = train_nsamples - val_nsamples
-train_dataset, val_dataset = random_split(train_dataset, [train_nsamples, val_nsamples])
+train_dataset, val_dataset = random_split(
+    train_dataset, [train_nsamples, val_nsamples]
+)
 
 # Load the test dataset:
 test_dataset = ProteinPairsSurfaces(
     "surface_data", ppi=args.search, train=False, transform=transformations
 )
 test_dataset = [data for data in test_dataset if iface_valid_filter(data)]
+test_loader = DataLoader(
+    test_dataset, batch_size=1, follow_batch=batch_vars, shuffle=True
+)
+print("Preprocessing testing dataset")
+test_dataset = iterate_surface_precompute(test_loader, net, args)
 
-# PyTorch geometric expects an explicit list of "batched variables":
-batch_vars = ["xyz_p1", "xyz_p2", "atom_coords_p1", "atom_coords_p2"]
 
 # PyTorch_geometric data loaders:
 train_loader = DataLoader(
-    train_dataset, batch_size=args.batch_size, follow_batch=batch_vars, shuffle=True
+    train_dataset, batch_size=1, follow_batch=batch_vars, shuffle=True
 )
-val_loader = DataLoader(
-    val_dataset, batch_size=args.batch_size, follow_batch=batch_vars
-)
-test_loader = DataLoader(
-    test_dataset, batch_size=args.batch_size, follow_batch=batch_vars
-)
+val_loader = DataLoader(val_dataset, batch_size=1, follow_batch=batch_vars)
+test_loader = DataLoader(test_dataset, batch_size=1, follow_batch=batch_vars)
 
-# Create the model, with a warm restart if applicable:
-net = dMaSIF(args)
-net = net.to(args.device)
 
 # Baseline optimizer:
 optimizer = torch.optim.Adam(net.parameters(), lr=3e-4, amsgrad=True)

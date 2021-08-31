@@ -102,14 +102,16 @@ def protonate(in_pdb_file, out_pdb_file):
     outfile.close()
 
 
-# Download pdb 
-pdbl = PDBList()
-pdb_filename = pdbl.retrieve_pdb_file(pdb_id, pdir=tmp_dir,file_format='pdb')
-
-##### Protonate with reduce, if hydrogens included.
-# - Always protonate as this is useful for charges. If necessary ignore hydrogens later.
 protonated_file = pdb_dir/f"{pdb_id}.pdb"
-protonate(pdb_filename, protonated_file)
+if not protonated_file.exists():
+    # Download pdb 
+    pdbl = PDBList()
+    pdb_filename = pdbl.retrieve_pdb_file(pdb_id, pdir=tmp_dir,file_format='pdb')
+
+    ##### Protonate with reduce, if hydrogens included.
+    # - Always protonate as this is useful for charges. If necessary ignore hydrogens later.
+    protonate(pdb_filename, protonated_file)
+
 pdb_filename = protonated_file
 
 # Extract chains of interest.

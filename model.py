@@ -101,12 +101,124 @@ class AtomNet(nn.Module):
         atomtypes = self.transform_types(atomtypes)
         return self.embed(xyz, atom_xyz, atomtypes, batch, atom_batch)
 
+class Atom_embedding_MP(nn.Module):
+    def __init__(self, args):
+        super(Atom_embedding_MP, self).__init__()
+        self.D = args.atom_dims
+        self.k = 16
+        self.n_layers = 3
+        self.mlp = nn.ModuleList(
+            [
+                nn.Sequential(
+                    nn.Linear(2 * self.D + 1, 2 * self.D + 1),
+                    nn.LeakyReLU(negative_slope=0.2),
+                    nn.Linear(2 * self.D + 1, self.D),
+                )
+                for i in range(self.n_layers)
+            ]
+        )
+        self.norm = nn.ModuleList(
+            [nn.GroupNorm(2, self.D) for i in range(self.n_layers)]
+        )
+        self.relu = nn.LeakyReLU(negative_slope=0.2)
+
+    def forward(self, x, y, y_atomtypes, x_batch, y_batch):
+        idx, dists = knn_atoms(x, y, x_batch, y_batch, k=self.k)  # N, 9, 7
+        num_points = x.shape[0]
+        num_dims = y_atomtypes.shape[-1]
+
+        point_emb = torch.ones_like(x[:, 0])[:, None].repeat(1, num_dims)
+        for i in range(self.n_layers):
+            features = y_atomtypes[idx.reshape(-1), :]
+            features = torch.cat([features, dists.reshape(-1, 1)], dim=1)
+            features = features.view(num_points, self.k, num_dims + 1)
+            features = torch.cat(
+                [point_emb[:, None, :].repeat(1, self.k, 1), features], dim=-1
+            )  # N, 8, 13
+
+            messages = self.mlp[i](features)  # N,8,6
+            messages = messages.sum(1)  # N,6
+            point_emb = point_emb + self.relu(self.norm[i](messages))
+
+        return point_emb
+
+class Atom_Atom_embedding_MP(nn.Module):
+    def __init__(self, args):
+        super(Atom_Atom_embedding_MP, self).__init__()
+        self.D = args.atom_dims
+        self.k = 17
+        self.n_layers = 3
+
+        self.mlp = nn.ModuleList(
+            [
+                nn.Sequential(
+                    nn.Linear(2 * self.D + 1, 2 * self.D + 1),
+                    nn.LeakyReLU(negative_slope=0.2),
+                    nn.Linear(2 * self.D + 1, self.D),
+                )
+                for i in range(self.n_layers)
+            ]
+        )
+
+        self.norm = nn.ModuleList(
+            [nn.GroupNorm(2, self.D) for i in range(self.n_layers)]
+        )
+        self.relu = nn.LeakyReLU(negative_slope=0.2)
+
+    def forward(self, x, y, y_atomtypes, x_batch, y_batch):
+        idx, dists = knn_atoms(x, y, x_batch, y_batch, k=self.k)  # N, 9, 7
+        idx = idx[:, 1:]  # Remove self
+        dists = dists[:, 1:]
+        k = self.k - 1
+        num_points = y_atomtypes.shape[0]
+
+        out = y_atomtypes
+        for i in range(self.n_layers):
+            _, num_dims = out.size()
+            features = out[idx.reshape(-1), :]
+            features = torch.cat([features, dists.reshape(-1, 1)], dim=1)
+            features = features.view(num_points, k, num_dims + 1)
+            features = torch.cat(
+                [out[:, None, :].repeat(1, k, 1), features], dim=-1
+            )  # N, 8, 13
+
+            messages = self.mlp[i](features)  # N,8,6
+            messages = messages.sum(1)  # N,6
+            out = out + self.relu(self.norm[i](messages))
+
+        return out
+
+class AtomNet_MP(nn.Module):
+    def __init__(self, args):
+        super(AtomNet_MP, self).__init__()
+        self.args = args
+
+        self.transform_types = nn.Sequential(
+            nn.Linear(args.atom_dims, args.atom_dims),
+            nn.LeakyReLU(negative_slope=0.2),
+            nn.Linear(args.atom_dims, args.atom_dims),
+        )
+
+        self.embed = Atom_embedding_MP(args)
+        self.atom_atom = Atom_Atom_embedding_MP(args)
+
+    def forward(self, xyz, atom_xyz, atomtypes, batch, atom_batch):
+        # Run a DGCNN on the available information:
+        atomtypes = self.transform_types(atomtypes)
+        atomtypes = self.atom_atom(
+            atom_xyz, atom_xyz, atomtypes, atom_batch, atom_batch
+        )
+        atomtypes = self.embed(xyz, atom_xyz, atomtypes, batch, atom_batch)
+        return atomtypes
+
 
 def combine_pair(P1, P2):
     P1P2 = {}
     for key in P1:
         v1 = P1[key]
         v2 = P2[key]
+        if v1 is None:
+            continue
 
         if key == "batch" or key == "batch_atoms":
             v1v2 = torch.cat([v1, v2 + v1[-1] + 1], dim=0)
@@ -133,7 +245,11 @@ def split_pair(P1P2):
     for key in P1P2:
         v1v2 = P1P2[key]
 
-        if "atom" in key:
+        if (key == "rand_rot") or (key == "atom_center"):
+            n = v1v2.shape[0] // 2
+            P1[key] = v1v2[:n].view(-1, 3)
+            P2[key] = v1v2[n:].view(-1, 3)
+        elif "atom" in key:
             P1[key] = v1v2[p1_atom_indices]
             P2[key] = v1v2[p2_atom_indices]
         elif key == "triangles":
@@ -150,23 +266,25 @@ def split_pair(P1P2):
     return P1, P2
 
 
-def project_iface_labels(
-    queries, batch_queries, source, batch_source, labels, threshold=2.0
-):
+
+def project_iface_labels(P, threshold=2.0):
+
+    queries = P["xyz"]
+    batch_queries = P["batch"]
+    source = P["mesh_xyz"]
+    batch_source = P["mesh_batch"]
+    labels = P["mesh_labels"]
     x_i = LazyTensor(queries[:, None, :])  # (N, 1, D)
     y_j = LazyTensor(source[None, :, :])  # (1, M, D)
 
-    D_ij = ((x_i - y_j) ** 2).sum(-1)  # (N, M)
+    D_ij = ((x_i - y_j) ** 2).sum(-1).sqrt()  # (N, M)
     D_ij.ranges = diagonal_ranges(batch_queries, batch_source)
     nn_i = D_ij.argmin(dim=1).view(-1)  # (N,)
     nn_dist_i = (
         D_ij.min(dim=1).view(-1, 1) < threshold
     ).float()  # If chain is not connected because of missing densities MaSIF cut out a part of the protein
-
     query_labels = labels[nn_i] * nn_dist_i
-
-    return query_labels  # (N,)
-
+    P["labels"] = query_labels
 
 class dMaSIF(nn.Module):
     def __init__(self, args):
@@ -181,7 +299,7 @@ class dMaSIF(nn.Module):
         H = args.post_units
 
         # Computes chemical features
-        self.atomnet = AtomNet(args)
+        self.atomnet = AtomNet_MP(args)
         self.dropout = nn.Dropout(args.dropout)
 
         if args.embedding_layer == "dMaSIF":
@@ -332,7 +450,10 @@ class dMaSIF(nn.Module):
             atomtypes=P["atomtypes"],
             resolution=self.args.resolution,
             sup_sampling=self.args.sup_sampling,
+            distance=self.args.distance,
         )
+        if P['mesh_labels'] is not None:
+            project_iface_labels(P)
 
     def forward(self, P1, P2=None):
         # Compute embeddings of the point clouds:

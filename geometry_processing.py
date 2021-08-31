@@ -318,7 +318,7 @@ def atoms_to_points_normals(
         Loss = (1.0 * dists).sum()
         g = torch.autograd.grad(Loss, p)[0]
         normals = F.normalize(g, p=2, dim=-1)  # (N, 3)
-
+    points = points - 0.5 * normals
     return points.detach(), normals.detach(), batch_points.detach()
 
 
@@ -554,7 +554,18 @@ def curvatures(
 
 
 #  Fast tangent convolution layer ===============================================
+class ContiguousBackward(torch.autograd.Function):
+    """
+    Function to ensure contiguous gradient in backward pass. To be applied after PyKeOps reduction.
+    N.B.: This workaround fixes a bug that will be fixed in ulterior KeOp releases. 
+    """
+    @staticmethod
+    def forward(ctx, input):
+        return input
 
+    @staticmethod
+    def backward(ctx, grad_output):
+        return grad_output.contiguous()
 
 class dMaSIFConv(nn.Module):
     def __init__(
@@ -617,14 +628,32 @@ class dMaSIFConv(nn.Module):
         self.Cuts = 8  # Number of hidden units for the 3D MLP Filter.
         self.cheap = cheap
 
+        # For performance reasons, we cut our "hidden" vectors
+        # in n_heads "independent heads" of dimension 8.
+        self.heads_dim = 8  # 4 is probably too small; 16 is certainly too big
+
+        # We accept "Hidden" dimensions of size 1, 2, 3, 4, 5, 6, 7, 8, 16, 32, 64, ...
+        if self.Hidden < self.heads_dim:
+            self.heads_dim = self.Hidden
+
+        if self.Hidden % self.heads_dim != 0:
+            raise ValueError(f"The dimension of the hidden units ({self.Hidden})"\
+                    + f"should be a multiple of the heads dimension ({self.heads_dim}).")
+        else:
+            self.n_heads = self.Hidden // self.heads_dim
+
+
         # Transformation of the input features:
         self.net_in = nn.Sequential(
             nn.Linear(self.Input, self.Hidden),  # (H, I) + (H,)
             nn.LeakyReLU(negative_slope=0.2),
             nn.Linear(self.Hidden, self.Hidden),  # (H, H) + (H,)
+            # nn.LayerNorm(self.Hidden),#nn.BatchNorm1d(self.Hidden),
             nn.LeakyReLU(negative_slope=0.2),
-            nn.BatchNorm1d(self.Hidden),
         )  #  (H,)
+        self.norm_in = nn.GroupNorm(4, self.Hidden)
+        # self.norm_in = nn.LayerNorm(self.Hidden)
+        # self.norm_in = nn.Identity()
 
         # 3D convolution filters, encoded as an MLP:
         if cheap:
@@ -643,9 +672,13 @@ class dMaSIFConv(nn.Module):
             nn.Linear(self.Hidden, self.Output),  # (O, H) + (O,)
             nn.LeakyReLU(negative_slope=0.2),
             nn.Linear(self.Output, self.Output),  # (O, O) + (O,)
+            # nn.LayerNorm(self.Output),#nn.BatchNorm1d(self.Output),
             nn.LeakyReLU(negative_slope=0.2),
-            nn.BatchNorm1d(self.Output),
         )  #  (O,)
+
+        self.norm_out = nn.GroupNorm(4, self.Output)
+        # self.norm_out = nn.LayerNorm(self.Output)
+        # self.norm_out = nn.Identity()
 
         # Custom initialization for the MLP convolution filters:
         # we get interesting piecewise affine cuts on a normalized neighborhood.
@@ -662,6 +695,7 @@ class dMaSIFConv(nn.Module):
                 )
                 nn.init.normal_(self.conv[2].bias)
                 self.conv[2].bias *= 0.5 * (self.conv[2].weight ** 2).sum(-1).sqrt()
+
 
     def forward(self, points, nuv, features, ranges=None):
         """Performs a quasi-geodesic interaction step.
@@ -689,6 +723,9 @@ class dMaSIFConv(nn.Module):
 
         # 1. Transform the input features: -------------------------------------
         features = self.net_in(features)  # (N, I) -> (N, H)
+        features = features.transpose(1, 0)[None, :, :]  # (1,H,N)
+        features = self.norm_in(features)
+        features = features[0].transpose(1, 0).contiguous()  # (1, H, N) -> (N, H)
 
         # 2. Compute the local "shape contexts": -------------------------------
 
@@ -713,50 +750,73 @@ class dMaSIFConv(nn.Module):
 
         n_j = LazyTensor(normals[None, :, :])  # (1, N, 3)
 
-        # Features:
-        f_j = LazyTensor(features[None, :, :])  # (1, N, H)
+        # To avoid register spilling when using large embeddings, we perform our KeOps reduction
+        # over the vector of length "self.Hidden = self.n_heads * self.heads_dim"
+        # as self.n_heads reduction over vectors of length self.heads_dim (= "Hd" in the comments).
+        head_out_features = []
+        for head in range(self.n_heads):
 
-        # Convolution parameters:
-        if self.cheap:
-            A, B = self.conv[0].weight, self.conv[0].bias  # (H, 3), (H,)
-            AB = torch.cat((A, B[:, None]), dim=1)  # (H, 4)
-            ab = LazyTensor(AB.view(1, 1, -1))  # (1, 1, H*4)
-        else:
-            A_1, B_1 = self.conv[0].weight, self.conv[0].bias  # (C, 3), (C,)
-            A_2, B_2 = self.conv[2].weight, self.conv[2].bias  # (H, C), (H,)
-            a_1 = LazyTensor(A_1.view(1, 1, -1))  # (1, 1, C*3)
-            b_1 = LazyTensor(B_1.view(1, 1, -1))  # (1, 1, C)
-            a_2 = LazyTensor(A_2.view(1, 1, -1))  # (1, 1, H*C)
-            b_2 = LazyTensor(B_2.view(1, 1, -1))  # (1, 1, H)
+            # Extract a slice of width Hd from the feature array
+            head_start = head * self.heads_dim
+            head_end = head_start + self.heads_dim
+            head_features = features[:, head_start:head_end].contiguous()  # (N, H) -> (N, Hd)
 
-        # 2.c Pseudo-geodesic window:
-        # Pseudo-geodesic squared distance:
-        d2_ij = ((x_j - x_i) ** 2).sum(-1) * ((2 - (n_i | n_j)) ** 2)  # (N, N, 1)
-        # Gaussian window:
-        window_ij = (-d2_ij).exp()  # (N, N, 1)
+            # Features:
+            f_j = LazyTensor(head_features[None, :, :])  # (1, N, Hd)
 
-        # 2.d Local MLP:
-        # Local coordinates:
-        X_ij = nuv_i.matvecmult(x_j - x_i)  # (N, N, 9) "@" (N, N, 3) = (N, N, 3)
-        # MLP:
-        if self.cheap:
-            X_ij = ab.matvecmult(
-                X_ij.concat(LazyTensor(1))
-            )  # (N, N, H*4) @ (N, N, 3+1) = (N, N, H)
-            X_ij = X_ij.relu()  # (N, N, H)
-        else:
-            X_ij = a_1.matvecmult(X_ij) + b_1  # (N, N, C)
-            X_ij = X_ij.relu()  # (N, N, C)
-            X_ij = a_2.matvecmult(X_ij) + b_2  # (N, N, H)
-            X_ij = X_ij.relu()
+            # Convolution parameters:
+            if self.cheap:
+                # Extract a slice of Hd lines: (H, 3) -> (Hd, 3)
+                A = self.conv[0].weight[head_start:head_end, :].contiguous()  
+                # Extract a slice of Hd coefficients: (H,) -> (Hd,)
+                B = self.conv[0].bias[head_start:head_end].contiguous() 
+                AB = torch.cat((A, B[:, None]), dim=1)  # (Hd, 4)
+                ab = LazyTensor(AB.view(1, 1, -1))  # (1, 1, Hd*4)
+            else:
+                A_1, B_1 = self.conv[0].weight, self.conv[0].bias  # (C, 3), (C,)
+                # Extract a slice of Hd lines: (H, C) -> (Hd, C)
+                A_2 = self.conv[2].weight[head_start:head_end, :].contiguous()
+                # Extract a slice of Hd coefficients: (H,) -> (Hd,)
+                B_2 = self.conv[2].bias[head_start:head_end].contiguous()
+                a_1 = LazyTensor(A_1.view(1, 1, -1))  # (1, 1, C*3)
+                b_1 = LazyTensor(B_1.view(1, 1, -1))  # (1, 1, C)
+                a_2 = LazyTensor(A_2.view(1, 1, -1))  # (1, 1, Hd*C)
+                b_2 = LazyTensor(B_2.view(1, 1, -1))  # (1, 1, Hd)
 
-        # 2.e Actual computation:
-        F_ij = window_ij * X_ij * f_j  # (N, N, H)
-        F_ij.ranges = ranges  # Support for batches and/or block-sparsity
+            # 2.c Pseudo-geodesic window:
+            # Pseudo-geodesic squared distance:
+            d2_ij = ((x_j - x_i) ** 2).sum(-1) * ((2 - (n_i | n_j)) ** 2)  # (N, N, 1)
+            # Gaussian window:
+            window_ij = (-d2_ij).exp()  # (N, N, 1)
 
-        features = F_ij.sum(dim=1)  # (N, H)
+            # 2.d Local MLP:
+            # Local coordinates:
+            X_ij = nuv_i.matvecmult(x_j - x_i)  # (N, N, 9) "@" (N, N, 3) = (N, N, 3)
+            # MLP:
+            if self.cheap:
+                X_ij = ab.matvecmult(
+                    X_ij.concat(LazyTensor(1))
+                )  # (N, N, Hd*4) @ (N, N, 3+1) = (N, N, Hd)
+                X_ij = X_ij.relu()  # (N, N, Hd)
+            else:
+                X_ij = a_1.matvecmult(X_ij) + b_1  # (N, N, C)
+                X_ij = X_ij.relu()  # (N, N, C)
+                X_ij = a_2.matvecmult(X_ij) + b_2  # (N, N, Hd)
+                X_ij = X_ij.relu()
+
+            # 2.e Actual computation:
+            F_ij = window_ij * X_ij * f_j  # (N, N, Hd)
+            F_ij.ranges = ranges  # Support for batches and/or block-sparsity
+
+            head_out_features.append(ContiguousBackward().apply(F_ij.sum(dim=1)))  # (N, Hd)
+
+        # Concatenate the result of our n_heads "attention heads":
+        features = torch.cat(head_out_features, dim=1)  # n_heads * (N, Hd) -> (N, H)
 
         # 3. Transform the output features: ------------------------------------
         features = self.net_out(features)  # (N, H) -> (N, O)
+        features = features.transpose(1, 0)[None, :, :]  # (1,O,N)
+        features = self.norm_out(features)
+        features = features[0].transpose(1, 0).contiguous()
 
         return features

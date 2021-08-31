@@ -35,7 +35,7 @@ transformations = (
 
 if args.single_pdb != "":
     single_data_dir = Path("./data_preprocessing/npys/")
-    test_dataset = [load_protein_pair(args.single_pdb, single_data_dir)]
+    test_dataset = [load_protein_pair(args.single_pdb, single_data_dir,single_pdb=True)]
     test_pdb_ids = [args.single_pdb]
 else:
     test_dataset = ProteinPairsSurfaces(
@@ -79,5 +79,5 @@ info = iterate(
     pdb_ids=test_pdb_ids,
 )
 
-np.save(f"timings/{args.experiment_name}_convtime.npy", info["conv_time"])
-np.save(f"timings/{args.experiment_name}_memoryusage.npy", info["memory_usage"])
+#np.save(f"timings/{args.experiment_name}_convtime.npy", info["conv_time"])
+#np.save(f"timings/{args.experiment_name}_memoryusage.npy", info["memory_usage"])
