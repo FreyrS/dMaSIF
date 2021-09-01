@@ -163,3 +163,9 @@ parser.add_argument(
     default="",
     help="Which structure to do inference on",
 )
+parser.add_argument(
+    "--pdb_list",
+    type=str,
+    default="",
+    help="Which structures to do inference on",
+)

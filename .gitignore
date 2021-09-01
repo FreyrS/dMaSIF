@@ -5,7 +5,6 @@
 01-benchmark_pdbs/
 shape_index/
 masif_preds/
-models/
 runs/
 venv/
 preds/
