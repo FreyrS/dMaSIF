@@ -202,6 +202,7 @@ def compute_loss(args, P1, P2, n_points_sample=16):
     pos_indices = torch.randperm(len(pos_labels))[:n_points_sample]
     neg_indices = torch.randperm(len(neg_labels))[:n_points_sample]
 
+    pos_score = pos_preds.sum()
     pos_preds = pos_preds[pos_indices]
     pos_labels = pos_labels[pos_indices]
     neg_preds = neg_preds[neg_indices]
@@ -212,7 +213,7 @@ def compute_loss(args, P1, P2, n_points_sample=16):
 
     loss = F.binary_cross_entropy_with_logits(preds_concat, labels_concat)
 
-    return loss, preds_concat, labels_concat
+    return loss, preds_concat, labels_concat, pos_score
 
 
 def extract_single(P_batch, number):
@@ -335,7 +336,7 @@ def iterate(
                 generate_matchinglabels(args, P1, P2)
 
             if P1["labels"] is not None:
-                loss, sampled_preds, sampled_labels = compute_loss(args, P1, P2)
+                loss, sampled_preds, sampled_labels, pos_score = compute_loss(args, P1, P2)
             else:
                 loss = torch.tensor(0.0)
                 sampled_preds = None
@@ -398,6 +399,7 @@ def iterate(
                     {
                         "Loss": loss.item(),
                         "ROC-AUC": roc_auc,
+                        "Score" : pos_score.item(),
                         "conv_time": outputs["conv_time"],
                         "memory_usage": outputs["memory_usage"],
                     },

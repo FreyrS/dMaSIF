@@ -85,5 +85,10 @@ info = iterate(
     pdb_ids=test_pdb_ids,
 )
 
+with open('score_list.txt','w+') as f:
+    for pdb,score in zip(test_pdb_ids,info['Score']):
+        f.write(f'{pdb}\t{score}\n')
+
+
 #np.save(f"timings/{args.experiment_name}_convtime.npy", info["conv_time"])
 #np.save(f"timings/{args.experiment_name}_memoryusage.npy", info["memory_usage"])

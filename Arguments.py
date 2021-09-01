@@ -44,7 +44,7 @@ parser.add_argument(
     help="Variance parameter in surface generation",
 )
 parser.add_argument(
-    "--sup_sampling", type=int, default=20, help="Sup-sampling ratio around atoms"
+    "--sup_sampling", type=int, default=100, help="Sup-sampling ratio around atoms"
 )
 
 # Hyper-parameters for the embedding
