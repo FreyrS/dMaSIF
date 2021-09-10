@@ -160,7 +160,7 @@ def soft_distances(x, y, batch_x, batch_y, smoothness=0.01, atomtypes=None):
     if atomtypes is not None:
         # Turn the one-hot encoding "atomtypes" into a vector of diameters "smoothness_i":
         # (N, 6)  -> (N, 1, 1)  (There are 6 atom types)
-        atomic_radii = torch.cuda.FloatTensor(
+        atomic_radii = tensor(
             [170, 110, 152, 155, 180, 190], device=x.device
         )
         atomic_radii = atomic_radii / atomic_radii.min()

@@ -202,7 +202,7 @@ def compute_loss(args, P1, P2, n_points_sample=16):
     pos_indices = torch.randperm(len(pos_labels))[:n_points_sample]
     neg_indices = torch.randperm(len(neg_labels))[:n_points_sample]
 
-    pos_score = pos_preds.sum()
+    pos_score = torch.sigmoid(pos_preds).sum()
     pos_preds = pos_preds[pos_indices]
     pos_labels = pos_labels[pos_indices]
     neg_preds = neg_preds[neg_indices]
@@ -393,6 +393,9 @@ def iterate(
                 continue
 
             R_values = outputs["R_values"]
+
+            with open('score_list.txt','a+') as f:
+                f.write(f'{batch_ids[protein_it]}\t{pos_score.item()}\n')
 
             info.append(
                 dict(
