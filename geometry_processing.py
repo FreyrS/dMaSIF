@@ -28,11 +28,13 @@ def save_vtk(
     Args:
         fname (string): filename.
         xyz (Tensor): (N,3) point cloud or vertices.
-        triangles (integer Tensor, optional): (T,3) mesh connectivity. Defaults to None.
+        triangles (integer 64-bit Tensor, optional): (T,3) mesh connectivity. Defaults to None.
         values (Tensor, optional): (N,D) values, supported by the vertices. Defaults to None.
         vectors (Tensor, optional): (N,3) vectors, supported by the vertices. Defaults to None.
         triangle_values (Tensor, optional): (T,D) values, supported by the triangles. Defaults to None.
     """
+
+    assert triangles.dtype == torch.int64, "Triangles should be of type torch.int64."
 
     # Encode the points/vertices as a VTK structure:
     if triangles is None:  # Point cloud
