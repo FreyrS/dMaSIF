@@ -32,6 +32,12 @@ parser.add_argument(
     help="Resolution of the generated point cloud",
 )
 parser.add_argument(
+    "--ground_energy",
+    type=float,
+    default=0.0,
+    help="Energy reference when scoring complexes",
+)
+parser.add_argument(
     "--distance",
     type=float,
     default=1.05,
