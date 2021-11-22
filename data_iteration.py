@@ -444,9 +444,10 @@ def iterate_surface_precompute(dataset, net, args):
         protein_pair.gen_normals_p1 = P1["normals"]
         protein_pair.gen_batch_p1 = P1["batch"]
         protein_pair.gen_labels_p1 = P1["labels"]
-        protein_pair.gen_xyz_p2 = P2["xyz"]
-        protein_pair.gen_normals_p2 = P2["normals"]
-        protein_pair.gen_batch_p2 = P2["batch"]
-        protein_pair.gen_labels_p2 = P2["labels"]
+        if not args.single_protein:
+            protein_pair.gen_xyz_p2 = P2["xyz"]
+            protein_pair.gen_normals_p2 = P2["normals"]
+            protein_pair.gen_batch_p2 = P2["batch"]
+            protein_pair.gen_labels_p2 = P2["labels"]
         processed_dataset.append(protein_pair.to("cpu"))
     return processed_dataset
