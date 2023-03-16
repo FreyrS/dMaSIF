@@ -320,12 +320,12 @@ class dMaSIFConv_seg(torch.nn.Module):
 
         # 3.b) Pseudo-geodesic window:
         # Pseudo-geodesic squared distance:
-        rho2_ij = ((x_j - x_i) ** 2).sum(-1) * ((2 - (n_i | n_j)) ** 2)  # (N, N, 1)
+        rho2_ij = ((x_j - x_i) ** 2).sum(-1) * ((2 - (n_i | n_j)) ** 2)  # (N, N, 1) # eq (5) in paper
         # Gaussian window:
         window_ij = (-rho2_ij).exp()  # (N, N, 1)
 
         # 3.c) Coordinates in the (u, v) basis - not oriented yet:
-        X_ij = uv_i.matvecmult(x_j - x_i)  # (N, N, 2)
+        X_ij = uv_i.matvecmult(x_j - x_i)  # (N, 1, 6)*(N, N, 3) -> (N, N, 2)
 
         # 3.d) Local average in the tangent plane:
         orientation_weight_ij = window_ij * weights_j  # (N, N, 1)

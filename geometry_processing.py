@@ -541,13 +541,12 @@ def curvatures(
 
         # (minus) Shape operator, i.e. the differential of the Gauss map:
         # = (PPt^-1 @ PQt) : simple estimation through linear regression
-        S = torch.solve(PQt, PPt).solution
+        S = torch.linalg.solve(PQt, PPt)
         a, b, c, d = S[:, 0, 0], S[:, 0, 1], S[:, 1, 0], S[:, 1, 1]  # (N,)
-
         # Normalization
         mean_curvature = a + d
         gauss_curvature = a * d - b * c
-        features += [mean_curvature.clamp(-1, 1), gauss_curvature.clamp(-1, 1)]
+        features += [torch.nan_to_num(mean_curvature).clamp(-1, 1), torch.nan_to_num(gauss_curvature).clamp(-1, 1)]
 
     features = torch.stack(features, dim=-1)
     return features

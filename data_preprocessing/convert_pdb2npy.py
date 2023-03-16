@@ -34,6 +34,9 @@ def load_structure_np(fname, center):
 def convert_pdbs(pdb_dir, npy_dir):
     print("Converting PDBs")
     for p in tqdm(pdb_dir.glob("*.pdb")):
-        protein = load_structure_np(p, center=False)
+        try:
+            protein = load_structure_np(p, center=False)
+        except:
+            print(p)
         np.save(npy_dir / (p.stem + "_atomxyz.npy"), protein["xyz"])
         np.save(npy_dir / (p.stem + "_atomtypes.npy"), protein["types"])

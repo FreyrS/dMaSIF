@@ -15,6 +15,11 @@ from data_iteration import iterate, iterate_surface_precompute
 from helper import *
 from Arguments import parser
 
+import pykeops
+
+# Clean up the already compiled files
+pykeops.clean_pykeops()
+
 # Parse the arguments, prepare the TensorBoard writer:
 args = parser.parse_args()
 writer = SummaryWriter("runs/{}".format(args.experiment_name))
@@ -110,7 +115,7 @@ for i in range(starting_epoch, args.n_epochs):
             dataloader = val_loader
         elif dataset_type == "Test":
             dataloader = test_loader
-
+        
         # Perform one pass through the data:
         info = iterate(
             net,

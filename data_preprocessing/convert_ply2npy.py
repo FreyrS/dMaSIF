@@ -42,7 +42,10 @@ def load_surface_np(fname, center):
 def convert_plys(ply_dir, npy_dir):
     print("Converting PLYs")
     for p in tqdm(ply_dir.glob("*.ply")):
-        protein = load_surface_np(p, center=False)
+        try:
+            protein = load_surface_np(p, center=False)
+        except:
+            print(p)
         np.save(npy_dir / (p.stem + "_xyz.npy"), protein["xyz"])
         np.save(npy_dir / (p.stem + "_triangles.npy"), protein["triangles"])
         np.save(npy_dir / (p.stem + "_features.npy"), protein["features"])

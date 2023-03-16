@@ -321,7 +321,7 @@ def iterate(
                 if not args.single_protein:
                     P2["rand_rot"] = torch.eye(3, device=P2["xyz"].device)
                     P2["atom_center"] = torch.zeros((1, 3), device=P2["xyz"].device)
-                    
+
             torch.cuda.synchronize()
             prediction_time = time.time()
             outputs = net(P1, P2)
