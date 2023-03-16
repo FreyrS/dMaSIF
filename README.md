@@ -44,16 +44,16 @@ Models have been trained on either a single NVIDIA RTX 2080 Ti or a single Tesla
 
 Scripts have been tested using the following two sets of core dependencies:
 
-| Dependency | First Option  | Second Option |
-| ------------- | ------------- | ------------- |
-| GCC | 7.5.0 | 8.4.0 |
-| CMAKE | 3.10.2 | 3.16.5 |
-| CUDA | 10.0.130 | 10.2.89  |
-| cuDNN | 7.6.4.38  | 7.6.5.32  |
-| Python | 3.6.9  | 3.7.7  |
-| PyTorch | 1.4.0  | 1.6.0  |
-| PyKeops | 1.4  | 1.4.1  |
-| PyTorch Geometric | 1.5.0  | 1.6.1  |
+| Dependency | First Option  | Second Option | Updated Version |
+| ------------- | ------------- | ------------- | ------------- |
+| GCC | 7.5.0 | 8.4.0 | 9.2.0 |
+| CMAKE | 3.10.2 | 3.16.5 | 3.22.2 |
+| CUDA | 10.0.130 | 10.2.89  | 11.7 |
+| cuDNN | 7.6.4.38  | 7.6.5.32  | 7.6.x |
+| Python | 3.6.9  | 3.7.7  | 3.8.16 |
+| PyTorch | 1.4.0  | 1.6.0  | 1.13.1 |
+| PyKeops | 1.4  | 1.4.1  | 2.1.1 |
+| PyTorch Geometric | 1.5.0  | 1.6.1  | 2.2.0 |
 
 
 ## Code overview
