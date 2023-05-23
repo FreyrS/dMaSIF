@@ -217,7 +217,7 @@ class PairData(Data):
         self.rand_rot1 = rand_rot1
         self.rand_rot2 = rand_rot2
 
-    def __inc__(self, key, value):
+    def __inc__(self, key, value, *args, **kwargs):
         if key == "face_p1":
             return self.xyz_p1.size(0)
         if key == "face_p2":
@@ -225,7 +225,7 @@ class PairData(Data):
         else:
             return super(PairData, self).__inc__(key, value)
 
-    def __cat_dim__(self, key, value):
+    def __cat_dim__(self, key, value, *args, **kwargs):
         if ("index" in key) or ("face" in key):
             return 1
         else:
